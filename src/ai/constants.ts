@@ -74,8 +74,8 @@ export const LLM_PROVIDERS: Record<string, LLMProviderConfig> = {
         category: 'domestic',
         engine: 'openai',
         baseUrl: 'https://api.deepseek.com/v1',
-        defaultModel: 'deepseek-v4-flash',
-        models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+        defaultModel: 'deepseek-flash',
+        models: ['deepseek-flash', 'deepseek-v4-pro'],
         labelKey: 'Deepseek',
         homepage: 'https://platform.deepseek.com/'
     },

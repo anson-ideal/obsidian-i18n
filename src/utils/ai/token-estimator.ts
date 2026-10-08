@@ -13,8 +13,8 @@ export interface TokenEstimation {
  *
  * ⚠️ 维护须知（2026-10 校准）
  * 本表仅覆盖已核实的模型。未收录的模型会落到 `default`，而 `default` 取的是
- * 旗舰级价格，对便宜的国产模型会**明显高估**（例如 DeepSeek-V4-Flash 实价
- * $0.14/$0.28，用 default 估算会虚高约 36 倍）。
+ * 旗舰级价格，对便宜的国产模型会**明显高估**（例如 DeepSeek 的 `deepseek-flash`
+ * 实价 $0.14/$0.28，用 default 估算会虚高约 36 倍）。
  *
  * 因此：若你使用的是国产模型且在意预估准确性，请在设置页开启
  * 「自定义价格」并直接填入服务商的「元 / 1M tokens」单价 —— 那条路径
@@ -46,8 +46,14 @@ const PRICING: Record<string, { input: number; output: number }> = {
     'gemini-2.5-flash': { input: 0.3e-6, output: 2.5e-6 },
     'gemini-2.5-flash-lite': { input: 0.1e-6, output: 0.4e-6 },
     // ── DeepSeek ──
+    // 'deepseek-flash' 是 /v1/models 实际返回的 ID；'deepseek-v4-flash' 是 2026-10 校准时的误写，
+    // 保留仅为兼容存量配置。
+    'deepseek-flash': { input: 0.14e-6, output: 0.28e-6 },
     'deepseek-v4-flash': { input: 0.14e-6, output: 0.28e-6 },
     'deepseek-v4-pro': { input: 1.74e-6, output: 3.48e-6 },
+    // ── 智谱 / Kimi / 通义（常见国产低价档）──
+    'glm-4.6': { input: 0.6e-6, output: 2.2e-6 },
+    'kimi-k2.5': { input: 0.6e-6, output: 2.5e-6 },
     // ── 本地模型（免费）──
     'ollama': { input: 0, output: 0 },
     // ── 回退默认（旗舰价位，对便宜模型会高估）──
@@ -96,12 +102,31 @@ export function estimateBatchTokens(items: any[], systemPrompt: string): number 
 }
 
 /**
+ * 按模型名查单价：先精确命中，再退回「最长前缀命中」
+ * （应对服务商给模型名加日期后缀的情况，如 gpt-5.4-mini-2026-03-01）
+ */
+function lookupPrice(model: string): { input: number; output: number } {
+    if (!model) return PRICING.default;
+    if (PRICING[model]) return PRICING[model];
+
+    const lower = model.toLowerCase();
+    let bestKey = '';
+    for (const key of Object.keys(PRICING)) {
+        if (key === 'default') continue;
+        if (lower.startsWith(key.toLowerCase()) && key.length > bestKey.length) {
+            bestKey = key;
+        }
+    }
+    return bestKey ? PRICING[bestKey] : PRICING.default;
+}
+
+/**
  * 根据模型估算成本 (返回人民币 CNY)
  */
 export function estimateCost(tokens: number, model: string, customPrice?: number): number {
     if (customPrice !== undefined && customPrice > 0) {
         return tokens * (customPrice / 1000000); // 如果是自定义价格，直接按用户输入的单价计算（用户此时输入的是人民币/1M tokens）
     }
-    const price = (PRICING as any)[model] || PRICING.default;
+    const price = lookupPrice(model);
     return tokens * price.input * USD_TO_CNY; // 官方价格是美元，乘以汇率转为人民币
 }

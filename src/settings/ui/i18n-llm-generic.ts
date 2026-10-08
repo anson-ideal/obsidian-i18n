@@ -291,6 +291,25 @@ export default class I18nLLMGeneric extends BaseSetting {
                         await this.i18n.saveSettings();
                     });
             });
+
+        // 推理强度：新版模型（deepseek-v4 系列等）默认会先吐一大段思维链，
+        // 翻译用不上，反而会挤占输出额度、拖慢速度、抬高账单。
+        new Setting(this.containerEl)
+            .setName(t('Settings.Ai.ReasoningEffortTitle'))
+            .setDesc(t('Settings.Ai.ReasoningEffortDesc'))
+            .addDropdown(dropdown => {
+                dropdown
+                    .addOption('none', t('Settings.Ai.ReasoningEffortNone'))
+                    .addOption('low', t('Settings.Ai.ReasoningEffortLow'))
+                    .addOption('medium', t('Settings.Ai.ReasoningEffortMedium'))
+                    .addOption('high', t('Settings.Ai.ReasoningEffortHigh'))
+                    .addOption('auto', t('Settings.Ai.ReasoningEffortAuto'))
+                    .setValue(this.settings.llmReasoningEffort || 'none')
+                    .onChange(async (value) => {
+                        this.settings.llmReasoningEffort = value;
+                        await this.i18n.saveSettings();
+                    });
+            });
     }
 
     private priceUI(): void {
@@ -366,7 +385,8 @@ export default class I18nLLMGeneric extends BaseSetting {
                                 this.settings.llmResponseFormat,
                                 this.settings.llmTimeout,
                                 this.settings.llmLanguage,
-                                this.settings.llmStyle
+                                this.settings.llmStyle,
+                                this.settings.llmReasoningEffort
                             );
 
                             // 1. 立即开启诊断弹窗，显示等待状态
