@@ -293,13 +293,13 @@ export const DEFAULT_SETTINGS: I18nSettings = {
 
     // Gemini 专属配置
     llmGeminiKey: '',
-    llmGeminiModel: 'gemini-2.0-flash',
+    llmGeminiModel: LLM_PROVIDERS['gemini'].defaultModel,
     llmGeminiProfiles: [{
         id: 'default',
         name: 'Default',
         url: '',
         key: '',
-        model: 'gemini-2.0-flash',
+        model: LLM_PROVIDERS['gemini'].defaultModel,
         useCustomPrice: false,
         priceInput: 0,
         priceOutput: 0
@@ -563,7 +563,10 @@ export const DEFAULT_SETTINGS: I18nSettings = {
     // ==============================
     // 网络配置
     // ==============================
-    githubProxyUrl: 'https://ghp.ci/',
+    // 默认直连。原默认值 https://ghp.ci/ 的公共实例已停止服务（连接直接失败），
+    // 而直连 raw.githubusercontent.com 在多数网络下可用；需要加速时由用户在
+    // 「综合设置 → 加速节点」中自行切换。
+    githubProxyUrl: '',
 
     cloudRepos: [],
     defaultCloudRepo: '',

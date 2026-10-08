@@ -6,6 +6,7 @@ import { DiagnosticModal } from "./diagnostic-modal";
 import { LLM_PROVIDERS, LLMProviderConfig } from "../../ai/constants";
 import { I18nSettings, LLMProfile } from "../data";
 import { OllamaTranslationService, OLLAMA_DEFAULT_URL } from "src/ai/ollama-translation-service";
+import { fetchOpenAICompatibleModels, clearModelCache } from "src/utils/ai/model-fetcher";
 
 export default class I18nLLMGeneric extends BaseSetting {
     private config: LLMProviderConfig;
@@ -188,23 +189,38 @@ export default class I18nLLMGeneric extends BaseSetting {
             .setName(t('Settings.Ai.ModelTitle'))
             .setDesc(providerId === 'ollama' ? t('Settings.Ai.OllamaModelDesc') : (t(`Settings.Ai.${labelKey}ModelDesc` as any) || t('Settings.Ai.ModelDesc')));
 
-        // Ollama 特有：刷新模型列表
-        if (providerId === 'ollama') {
+        // 刷新模型列表
+        // - 本地通道 (ollama / LM Studio)：走双协议探测
+        // - 云端 OpenAI 兼容通道：走 {baseUrl}/models 实时拉取
+        // Gemini 走自家 engine，其 OpenAI 兼容路径不提供 /models，故不显示该按钮。
+        const canRefreshModels = providerId === 'ollama' || this.config.engine === 'openai';
+        if (canRefreshModels) {
             modelSetting.addButton(btn => {
                 btn.setIcon('refresh-cw')
-                    .setTooltip(t('Settings.Ai.OllamaFetchModelsBtn'))
+                    .setTooltip(t('Settings.Ai.ModelFetchBtn'))
                     .onClick(async () => {
                         btn.setDisabled(true);
                         try {
-                            const fetchedModels = await OllamaTranslationService.fetchModels(activeProfile.url || OLLAMA_DEFAULT_URL);
-                            if (fetchedModels.length === 0) {
-                                new Notice(t('Settings.Ai.OllamaNoModels'));
+                            clearModelCache();
+
+                            let fetchedModels: string[];
+                            if (providerId === 'ollama') {
+                                fetchedModels = await OllamaTranslationService.fetchModels(activeProfile.url || OLLAMA_DEFAULT_URL);
                             } else {
-                                new Notice(t('Settings.Ai.OllamaModelsLoaded', { count: fetchedModels.length }));
+                                fetchedModels = await fetchOpenAICompatibleModels(
+                                    activeProfile.url || this.config.baseUrl,
+                                    activeProfile.key
+                                );
+                            }
+
+                            if (fetchedModels.length === 0) {
+                                new Notice(t('Settings.Ai.ModelFetchNoResult'));
+                            } else {
+                                new Notice(t('Settings.Ai.ModelFetchLoaded', { count: fetchedModels.length }));
                                 this.settingTab.llmDisplay();
                             }
                         } catch {
-                            new Notice(t('Settings.Ai.OllamaFetchFailed'));
+                            new Notice(t('Settings.Ai.ModelFetchFailed'));
                         } finally {
                             btn.setDisabled(false);
                         }
@@ -227,11 +243,18 @@ export default class I18nLLMGeneric extends BaseSetting {
         modelSetting.addDropdown(async dropdown => {
             dropdown.addOption('', t('Settings.Ai.ModelSelectPlaceholder'));
 
+            // 优先取服务商实时列表，拉不到再退回内置预设。
+            // 内置预设必然随服务商迭代而腐烂，只应作为兜底而非主数据源。
             let finalModels = models;
             if (providerId === 'ollama') {
-                try {
-                    finalModels = await OllamaTranslationService.fetchModels(activeProfile.url || OLLAMA_DEFAULT_URL);
-                } catch { /* ignore */ }
+                const local = await OllamaTranslationService.fetchModels(activeProfile.url || OLLAMA_DEFAULT_URL);
+                if (local.length > 0) finalModels = local;
+            } else if (this.config.engine === 'openai') {
+                const live = await fetchOpenAICompatibleModels(
+                    activeProfile.url || this.config.baseUrl,
+                    activeProfile.key
+                );
+                if (live.length > 0) finalModels = live;
             }
 
             finalModels.forEach(m => dropdown.addOption(m, m));
